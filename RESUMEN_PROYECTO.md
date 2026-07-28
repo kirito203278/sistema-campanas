@@ -120,16 +120,19 @@ Todo probado en el navegador real con datos de prueba (creados y limpiados vía 
    - Frontend: el CM ve un cronómetro corriendo ("Edición habilitada · expira en 01:59:xx") en `DatosSemanalesTab.tsx` mientras el permiso esté activo, y puede editar/guardar como si la semana siguiera abierta; al expirar vuelve a "Cerrada" sola, sin job adicional. El admin otorga el permiso desde `ClienteAdminDetail.tsx` (botón "Habilitar edición 2h" por semana cerrada, oculto para admins de solo lectura).
    - Probado de punta a punta: job de cierre → 0 en vez de blanco → admin habilita → CM edita con cronómetro corriendo → guarda bien → expira → se bloquea de nuevo (confirmado también a nivel backend con `curl`, 403 tras expirar).
 
+5. **"Cerrar sesión" se veía mal al pasar el mouse**: el botón usa `.btn-ghost`, cuyo `:hover` (`background: var(--ink-100)`, gris muy claro) está pensado para fondos claros — dentro de la barra lateral morada oscura se veía como una píldora blanca fuera de lugar. Se agregó `.btn-ghost-dark` (fondo transparente, hover `rgba(255,255,255,0.08)`) en `frontend/src/index.css`, usado en `Sidebar.tsx` y `AdminSidebar.tsx`.
+6. **Bug de distorsión en las gráficas, parte 2**: el fix de las letras (sesión anterior del mismo día) no alcanzaba — los círculos de cada punto en `LineChart.tsx` también salían estirados como óvalo, por la misma causa (`viewBox` de "100 unidades" fijas vs. el ancho real en píxeles, con `preserveAspectRatio="none"` forzando escalas X/Y distintas). Se corrigió de raíz en `BarChart.tsx` y `LineChart.tsx`: el `viewBox` ahora usa el ancho real medido con `ResizeObserver` (1 unidad = 1 px en ambos ejes), así que `preserveAspectRatio` ya ni hace falta. Verificado a nivel de píxel: los círculos miden exactamente lo mismo de ancho que de alto.
+7. **Limpieza total de datos de ejemplo — ejecutada**: se vació `clientes, campanas, semanas, mensuales, cuentas_publicitarias, observaciones, archivo_no_renovados, notificaciones, bitacora` (los 7 clientes de seed/prueba que había, con todo su historial). Se conservaron las cuentas de usuario (CM/admin, 9 en total) y `metricas_config`. El sistema queda listo para capturar datos reales desde cero.
+8. **Git inicializado y primer commit hecho — todavía NO subido a GitHub** (falta que el usuario diga la cuenta/organización; el repo debe ser privado). Antes de comitear se limpiaron dos cosas que no debían quedar en el historial: 3 archivos basura `<_io.BytesIO object at ...>` en `backend/` (residuo físico del bug ya corregido de `str(buffer)` en los reportes) y `.claude/settings.local.json` (tenía una contraseña real en texto plano guardada en un permiso de Bash) — este último se agregó a `.gitignore`.
+
 ---
 
 ## Pendientes / decisiones abiertas
 
 - **"Habla en plural de listo"** — nunca se resolvió; el usuario no volvió a mencionarlo, sigue sin identificar a qué texto/botón se refería.
 - **Notificación por WhatsApp** (capa 3, sección 8) — no implementada; la especificación la marca como opcional a futuro.
-- **Limpieza total del seed/datos de ejemplo** — pendiente explícito, esperar a que se pida antes de tocarlo.
-- **Subir a git** — pendiente, el repo ni siquiera está inicializado (`git init` primero).
-- **Desplegar a internet** — no iniciado. Falta: HTTPS, dominio, CORS con el dominio real (hoy solo permite `localhost:5173`), variables de entorno de producción (`AES_KEY_B64`, `JWT_SECRET`, `HUELLA_SECRET` — nunca reusar las de desarrollo).
-- **Notificaciones de prueba repetidas en Ferretería** (3 avisos idénticos de vencimiento) — quedaron ahí de mis pruebas de verificación; no se ha confirmado si limpiarlas o dejarlas.
+- **Subir a GitHub** — repo local listo (`git init` + primer commit), privado, pero falta que el usuario indique su cuenta/organización de GitHub para crear el remoto y hacer push.
+- **Desplegar a internet** — no iniciado, el usuario todavía no decide el tipo de hosting (se le explicaron dos caminos: VPS barato tipo DigitalOcean/Hetzner con el mismo docker compose + dominio + Let's Encrypt, o un servicio administrado tipo Railway/Render). Falta también: HTTPS, dominio, CORS con el dominio real (hoy solo permite `localhost:5173`), variables de entorno de producción (`AES_KEY_B64`, `JWT_SECRET`, `HUELLA_SECRET` — nunca reusar las de desarrollo).
 - **tipo_cuenta / metodo_pago / forma_pago como texto libre** — si en algún momento se quiere restringir a opciones fijas (dropdown), falta que el usuario dé la lista exacta de valores.
 
 ## Archivos secretos que NO se suben a git (ya en `.gitignore`)
