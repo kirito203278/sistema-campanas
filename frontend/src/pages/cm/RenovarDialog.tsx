@@ -2,9 +2,11 @@ import { useState } from 'react'
 import { api, ApiError } from '../../api/client'
 import type { CampanaDetalle } from '../../api/types'
 
+// "Un mes" para efectos de la campaña son 30 días exactos, no el mes de
+// calendario (que da 28-31 días según el mes de arranque).
 function inUnMesIso() {
   const d = new Date()
-  d.setMonth(d.getMonth() + 1)
+  d.setDate(d.getDate() + 30)
   return d.toISOString().slice(0, 10)
 }
 

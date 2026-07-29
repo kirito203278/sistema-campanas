@@ -12,9 +12,11 @@ export interface CampanaFieldsValue {
   fecha_renovacion: string
 }
 
+// "Un mes" para efectos de la campaña son 30 días exactos, no el mes de
+// calendario (que da 28-31 días según el mes de arranque).
 export function addMonthIso(iso: string): string {
   const d = new Date(iso)
-  d.setMonth(d.getMonth() + 1)
+  d.setDate(d.getDate() + 30)
   return d.toISOString().slice(0, 10)
 }
 

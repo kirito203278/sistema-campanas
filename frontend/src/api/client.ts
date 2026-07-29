@@ -12,12 +12,17 @@ export class ApiError extends Error {
   }
 }
 
-let token: string | null = localStorage.getItem('token')
+// sessionStorage, no localStorage: localStorage se comparte entre todas las
+// pestañas del mismo navegador, así que iniciar sesión en una pestaña (p. ej.
+// como admin) pisaba la sesión de otra pestaña abierta (p. ej. como CM) en
+// cuanto esa segunda pestaña volvía a leer el token (por ejemplo al
+// refrescar). sessionStorage es independiente por pestaña.
+let token: string | null = sessionStorage.getItem('token')
 
 export function setToken(t: string | null) {
   token = t
-  if (t) localStorage.setItem('token', t)
-  else localStorage.removeItem('token')
+  if (t) sessionStorage.setItem('token', t)
+  else sessionStorage.removeItem('token')
 }
 
 export function getToken() {
