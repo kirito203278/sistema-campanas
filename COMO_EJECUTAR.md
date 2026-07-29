@@ -13,6 +13,7 @@ Ruta del proyecto: `/home/kiri/Documentos/sistema-campanas`
 7. [Apagar](#7-apagar)
 8. [Otros comandos útiles](#8-otros-comandos-útiles)
 9. [Desplegar en Render (gratis)](#9-desplegar-en-render-gratis)
+10. [Respaldar la base de producción](#10-respaldar-la-base-de-producción)
 
 ---
 
@@ -233,3 +234,19 @@ Ruta elegida por presupuesto cero: **Render** (plan gratis del servicio web, no 
    | `https://tudominio.com/api/jobs/run/purga_no_renovados` | Diario 12:10 |
 
 6. **Opcional** — un ping cada 10-14 min con [UptimeRobot](https://uptimerobot.com) (gratis) a la URL pública, para que responda rápido casi siempre en vez de esperar el "despertar en frío".
+
+---
+
+## 10. Respaldar la base de producción
+
+Neon (plan gratis) tiene una ventana de recuperación corta si algo se borra por error — vale la pena hacer un respaldo manual de vez en cuando (una vez al mes es razonable). No hace falta instalar nada: se usa una imagen de Docker desechable con la misma versión de Postgres que Neon (revisa qué versión te muestra Neon en su dashboard si cambia con el tiempo).
+
+```bash
+docker run --rm postgres:18-alpine pg_dump "<tu DATABASE_URL de Neon, con postgresql:// normal, no +psycopg2>" > respaldo-$(date +%Y-%m-%d).sql
+```
+
+Esto genera un archivo `.sql` con todo (estructura + datos) en tu carpeta actual. Guárdalo en un lugar seguro (no lo subas a git — son datos reales de clientes). Para restaurarlo algún día, sería:
+
+```bash
+docker run --rm -i postgres:18-alpine psql "<connection string de la base destino>" < respaldo-2026-07-29.sql
+```
