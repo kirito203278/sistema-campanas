@@ -17,12 +17,15 @@ services:
       retries: 10
 
   backend:
-    build: ./backend
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
     restart: unless-stopped
     env_file:
       - .env
     environment:
       DATABASE_URL: postgresql+psycopg2://campanas:campanas@db:5432/campanas
+      RELOAD: "true"
     depends_on:
       db:
         condition: service_healthy

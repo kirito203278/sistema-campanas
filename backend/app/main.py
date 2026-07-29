@@ -7,9 +7,10 @@ from fastapi.staticfiles import StaticFiles
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
+from app.config import get_settings
 from app.database import get_db
 from app.jobs.scheduler import start_scheduler, stop_scheduler
-from app.routers import admin, admin_data, auth, cm, notificaciones
+from app.routers import admin, admin_data, auth, cm, jobs, notificaciones
 
 STATIC_DIR = Path(__file__).parent / "static"
 
@@ -23,11 +24,12 @@ async def lifespan(_app: FastAPI):
 
 app = FastAPI(title="Sistema de gestión de campañas · INNquietus", lifespan=lifespan)
 
-# CORS abierto solo para el servidor de desarrollo de React (Vite); en
-# producción el frontend se sirve desde el propio backend (mismo origen).
+# En desarrollo son los orígenes del servidor de Vite; en producción el
+# frontend se sirve desde el propio backend (mismo origen), pero se
+# configura con el dominio real por si algo lo consume desde otro origen.
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
+    allow_origins=[o.strip() for o in get_settings().cors_origins.split(",") if o.strip()],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -38,6 +40,7 @@ app.include_router(admin.router)
 app.include_router(admin_data.router)
 app.include_router(cm.router)
 app.include_router(notificaciones.router)
+app.include_router(jobs.router)
 
 
 @app.get("/api/health")

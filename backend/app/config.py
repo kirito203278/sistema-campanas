@@ -22,6 +22,17 @@ class Settings(BaseSettings):
     # Huella de cuentas publicitarias (HMAC), separada de la clave AES
     huella_secret: str = "changeme-dev-huella-secret"
 
+    # Secreto para disparar los jobs programados desde un cron externo
+    # (POST /api/jobs/run/{nombre}), para hosting donde el proceso puede
+    # estar dormido a la hora exacta del job.
+    jobs_secret: str = "changeme-dev-jobs-secret"
+
+    # Orígenes permitidos por CORS, separados por coma. En desarrollo son
+    # los del servidor de Vite; en producción se configura con el dominio
+    # real (el frontend se sirve desde el propio backend, mismo origen,
+    # pero CORS igual aplica si algo lo consume desde otro origen).
+    cors_origins: str = "http://localhost:5173,http://127.0.0.1:5173"
+
     # Nombre de la agencia para el reporte PDF
     agencia_nombre: str = "INNquietus"
 

@@ -12,6 +12,7 @@ Ruta del proyecto: `/home/kiri/Documentos/sistema-campanas`
 6. [Generar el PDF/TXT de credenciales](#6-generar-el-pdftxt-de-credenciales)
 7. [Apagar](#7-apagar)
 8. [Otros comandos útiles](#8-otros-comandos-útiles)
+9. [Desplegar en Render (gratis)](#9-desplegar-en-render-gratis)
 
 ---
 
@@ -188,3 +189,47 @@ docker compose exec backend python -m app.jobs.recordatorio
 docker compose exec backend python -m app.jobs.cierre_ciclo
 docker compose exec backend python -m app.jobs.purga_no_renovados
 ```
+
+---
+
+## 9. Desplegar en Render (gratis)
+
+Ruta elegida por presupuesto cero: **Render** (plan gratis del servicio web, no pide tarjeta) + una base de datos Postgres gratis externa (**Neon** o **Supabase**, tampoco piden tarjeta). El dominio se queda comprado donde ya esté (p. ej. HostGator) y solo se apunta hacia Render.
+
+**Limitación conocida y cómo se resolvió**: el plan gratis de Render "duerme" el servicio tras ~15 min sin tráfico. Si duerme justo a la hora de un job programado (cierre de semana, recordatorio, etc.), ese job no dispara solo. Por eso el backend expone `POST /api/jobs/run/{nombre}` (protegido con un secreto), para que un cron externo gratis lo llame a la hora exacta — la llamada misma despierta el proceso y corre el job en el mismo golpe. El scheduler interno (APScheduler) se queda activo igual, como respaldo para cuando el servicio ya está despierto por otra razón.
+
+### Pasos (todos se hacen en paneles web, no hay comando de Claude Code para esto)
+
+1. **Base de datos** — crea un proyecto Postgres gratis en [Neon](https://neon.tech) o [Supabase](https://supabase.com) (sin tarjeta). Copia el connection string; agrégale `?sslmode=require` al final si no lo trae ya.
+
+2. **Render** — crea cuenta en [render.com](https://render.com) (sin tarjeta para el plan gratis de "Web Service"). "New" → "Web Service" → conecta el repo de GitHub (una vez esté subido). Configuración:
+   - **Runtime**: Docker
+   - **Dockerfile path**: `backend/Dockerfile`
+   - **Docker build context**: `.` (raíz del repo)
+
+3. **Variables de entorno en Render** (sección "Environment"): genera valores nuevos con los comandos de la sección 2 de este documento — **nunca reuses los de desarrollo**.
+
+   | Variable | Valor |
+   |---|---|
+   | `DATABASE_URL` | el connection string de Neon/Supabase (con `postgresql+psycopg2://` al inicio, no `postgresql://`) |
+   | `JWT_SECRET` | nuevo, generado |
+   | `AES_KEY_B64` | nuevo, generado |
+   | `HUELLA_SECRET` | nuevo, generado |
+   | `JOBS_SECRET` | nuevo, generado |
+   | `CORS_ORIGINS` | `https://tudominio.com` (el dominio final) |
+   | `TZ` | `America/Mazatlan` |
+
+   No pongas `RELOAD` (esa es solo para desarrollo local).
+
+4. **Dominio** — en Render, agrega el dominio propio al servicio; te va a dar un registro (CNAME o A) para configurar en el DNS de HostGator. El HTTPS lo emite Render solo, sin pasos extra.
+
+5. **Cron externo para los jobs** — crea cuenta gratis en [cron-job.org](https://cron-job.org) (sin tarjeta) y configura 4 tareas, todas con método `POST`, header `X-Jobs-Secret: <el valor que pusiste en Render>`, en la zona horaria de México (o convertida a UTC si el sitio no deja elegir zona):
+
+   | URL | Horario |
+   |---|---|
+   | `https://tudominio.com/api/jobs/run/cierre_semana` | Sábados 00:05 |
+   | `https://tudominio.com/api/jobs/run/recordatorio_captura` | Viernes 14:00 |
+   | `https://tudominio.com/api/jobs/run/cierre_ciclo` | Diario 12:00 |
+   | `https://tudominio.com/api/jobs/run/purga_no_renovados` | Diario 12:10 |
+
+6. **Opcional** — un ping cada 10-14 min con [UptimeRobot](https://uptimerobot.com) (gratis) a la URL pública, para que responda rápido casi siempre en vez de esperar el "despertar en frío".
