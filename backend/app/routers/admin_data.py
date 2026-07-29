@@ -88,13 +88,28 @@ def listar_clientes_de_cm(cm_id: int, admin: Usuario = Depends(require_admin), d
 @router.post("/cms/{cm_id}/baja", response_model=MigrarCMOut)
 def dar_de_baja_cm(cm_id: int, payload: MigrarCMIn,
                     admin: Usuario = Depends(require_admin_write), db: Session = Depends(get_db)):
+    origen = db.get(Usuario, cm_id)
+    if origen is None or origen.rol != "cm":
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "CM de origen no encontrado")
+
+    total_clientes = db.query(Cliente).filter_by(cm_id=cm_id).count()
+
+    # Sin cartera no hay nada que migrar; exigir un CM destino en ese caso
+    # bloqueaba la baja sin ninguna razón real.
+    if total_clientes == 0:
+        origen.activo = False
+        registrar(db, usuario_id=admin.id, accion="baja_cm_sin_cartera",
+                  detalle={"cm_origen_id": origen.id, "cm_origen_username": origen.username})
+        db.commit()
+        return MigrarCMOut(clientes_migrados=0, cm_origen=origen.nombre, cm_destino="—")
+
+    if payload.migrar_a_cm_id is None:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST,
+                             "Este CM tiene clientes en su cartera; elige un CM destino para migrarla")
     if cm_id == payload.migrar_a_cm_id:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "No puedes migrar la cartera a la misma cuenta")
 
-    origen = db.get(Usuario, cm_id)
     destino = db.get(Usuario, payload.migrar_a_cm_id)
-    if origen is None or origen.rol != "cm":
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "CM de origen no encontrado")
     if destino is None or destino.rol != "cm" or not destino.activo:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "CM de destino no encontrado o inactivo")
 

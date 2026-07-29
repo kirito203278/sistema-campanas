@@ -70,7 +70,7 @@ class MensualConsolidado(BaseModel):
 
 
 class MigrarCMIn(BaseModel):
-    migrar_a_cm_id: int
+    migrar_a_cm_id: int | None = None
 
 
 class MigrarCMOut(BaseModel):
