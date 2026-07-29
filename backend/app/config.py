@@ -41,7 +41,7 @@ class Settings(BaseSettings):
     force_seed: bool = False
 
     # Zona horaria del negocio (para los jobs programados)
-    tz: str = "America/Mazatlan"
+    tz: str = "America/Mexico_City"
 
 
 @lru_cache
