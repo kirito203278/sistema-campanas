@@ -129,13 +129,44 @@ Todo probado en el navegador real con datos de prueba (creados y limpiados vía 
 
 ---
 
+## Cambios de la sesión del 29 de julio 2026: despliegue a producción
+
+**Repo en GitHub**: privado, `github.com/kirito203278/sistema-campanas` (cuenta personal del usuario, no la de la empresa — decisión explícita para simplificar). Antes del primer push se limpiaron del repo 3 archivos basura `<_io.BytesIO...>` y se confirmó que `.env`/credenciales no se suben.
+
+**Desplegado en Render** (plan gratis, sin tarjeta) + **Neon** (Postgres gratis, sin tarjeta) — decisión forzada por falta de presupuesto. URL: `https://sistema-campanas.onrender.com`.
+
+1. **Cambios de código para que el Dockerfile sirva tanto local como Render**:
+   - `backend/Dockerfile`: pasó a **multi-stage** (etapa `node:20-alpine` compila el frontend, se copia a la imagen final de Python) — Render construye desde git y `backend/app/static` no se versiona, así que la imagen tiene que ser autosuficiente. No afecta el flujo local: `docker-compose.yml` sigue montando `./backend:/app` como bind mount, que tapa lo horneado en la imagen en tiempo de ejecución.
+   - `docker-compose.yml`: `build` del servicio `backend` pasó de `./backend` a `{context: ., dockerfile: backend/Dockerfile}` (necesita ver también `frontend/`). Se agregó `RELOAD: "true"` en su `environment` para conservar el auto-reload local.
+   - `backend/entrypoint.sh`: puerto ahora lee `${PORT:-8000}` (Render asigna el puerto por variable de entorno) y `--reload` de uvicorn ahora es condicional a `RELOAD=true` (nunca debe ir en producción).
+   - `backend/app/main.py`: CORS ya no hardcodeado a `localhost:5173` — nuevo campo `Settings.cors_origins` (coma-separado) en `backend/app/config.py`.
+   - Nuevo endpoint `POST /api/jobs/run/{nombre}` (`backend/app/routers/jobs.py`), protegido con secreto compartido (`X-Jobs-Secret`, comparación `hmac.compare_digest`) — dispara cualquiera de los 4 jobs programados desde un cron externo. Necesario porque Render gratis "duerme" el proceso tras inactividad y el scheduler interno (APScheduler) podría no estar despierto a la hora exacta; este endpoint es un respaldo adicional, no reemplaza el scheduler. Nuevo campo `Settings.jobs_secret`.
+
+2. **Zona horaria corregida**: el default de `Settings.tz` (`backend/app/config.py`) y de `.env.example` estaba en `America/Mazatlan` desde el inicio del proyecto — nunca se había confirmado la ubicación real de la agencia. La agencia opera desde **Pachuca, Hidalgo**, que usa `America/Mexico_City` (UTC-6, una hora adelante de Mazatlán). Corregido en ambos lugares y en el `.env` local. Importante: la variable `TZ` la respeta directamente el sistema operativo (glibc), así que corrige no solo el scheduler sino cualquier `datetime.now()`/`date.today()` sin zona explícita en todo el código.
+
+3. **Infraestructura externa configurada** (todo del lado del usuario, en paneles web):
+   - **cron-job.org**: 4 tareas (`cierre_semana` sábados 00:05, `recordatorio_captura` viernes 14:00, `cierre_ciclo` diario 12:00, `purga_no_renovados` diario 12:10), zona horaria America/Mexico_City, método POST + header `X-Jobs-Secret`. Los 4 probados con `curl` contra producción, responden 200.
+   - **UptimeRobot**: monitor HTTP(s) a `/api/health` cada 5 min, para reducir el "despertar en frío" del plan gratis de Render.
+   - Primera cuenta admin real (`cristina`) creada directamente contra la base de Neon (bootstrap — no había forma de crear la primera cuenta vía la app misma, porque el alta de usuarios requiere ya estar logueado como admin). Verificado login real contra producción.
+
+4. **Refuerzos de seguridad** (commit `8874c0b`):
+   - Nuevo `backend/app/security/rate_limit.py`: bloquea un `username` tras 5 intentos fallidos de login en 15 minutos (en memoria, un solo proceso — mismo supuesto que ya usa el scheduler). `backend/app/routers/auth.py` lo integra devolviendo 429. Mitiga fuerza bruta (riesgo ya bajo porque las contraseñas se generan aleatorias de 18 caracteres, no las elige la gente).
+   - `CORS_ORIGINS` en Render corregido de `*` (cualquier origen, con `allow_credentials=True` — combinación insegura) al dominio real.
+   - Documentado en `COMO_EJECUTAR.md` (sección 10) cómo respaldar la base de Neon con `pg_dump` vía Docker desechable (`postgres:18-alpine`, tiene que coincidir la versión mayor con la de Neon — verificado que funciona).
+
+5. **Fix real encontrado dando de alta al equipo real**: `POST /admin/cms/{id}/baja` (dar de baja a un CM) siempre exigía un CM destino para migrar la cartera, **incluso con 0 clientes** — no había nada que migrar, pero si no existía otro CM activo la baja quedaba bloqueada sin motivo. Corregido en `backend/app/routers/admin_data.py` y `backend/app/schemas_admin.py` (`MigrarCMIn.migrar_a_cm_id` ahora opcional): si el CM tiene 0 clientes, se da de baja directo sin pedir destino; si tiene cartera, se sigue exigiendo como antes. `frontend/src/pages/admin/BajaCmDialog.tsx` actualizado para reflejarlo. Verificado también que al migrar SÍ se incluyen los clientes en estado `no_renovado`, no solo los activos (la consulta de migración nunca filtró por estado).
+
+6. **Prueba completa de regresión** de todo el sistema (todas las fases + todos los cambios de las 3 sesiones), hecha contra la base local con datos desechables (creados y borrados con `curl` directo a la API + verificación en navegador real sin errores de consola): auth y rate limiting, alta de clientes, captura semanal y autocálculo, mensual manual, los 3 caminos de vencimiento/renovación completos, panel admin (cartera, semáforo, gráficas, equipo, permisos de solo lectura), los 4 reportes PDF, los 4 jobs programados, el permiso de edición de 2h de punta a punta. Sin errores encontrados.
+
+---
+
 ## Pendientes / decisiones abiertas
 
 - **"Habla en plural de listo"** — nunca se resolvió; el usuario no volvió a mencionarlo, sigue sin identificar a qué texto/botón se refería.
 - **Notificación por WhatsApp** (capa 3, sección 8) — no implementada; la especificación la marca como opcional a futuro.
-- **Subir a GitHub** — repo local listo (`git init` + primer commit), privado, pero falta que el usuario indique su cuenta/organización de GitHub para crear el remoto y hacer push.
-- **Desplegar a internet** — no iniciado, el usuario todavía no decide el tipo de hosting (se le explicaron dos caminos: VPS barato tipo DigitalOcean/Hetzner con el mismo docker compose + dominio + Let's Encrypt, o un servicio administrado tipo Railway/Render). Falta también: HTTPS, dominio, CORS con el dominio real (hoy solo permite `localhost:5173`), variables de entorno de producción (`AES_KEY_B64`, `JWT_SECRET`, `HUELLA_SECRET` — nunca reusar las de desarrollo).
+- **Conectar el dominio de HostGator** — opcional, puramente estético; el sistema ya funciona 100% en la URL de Render.
 - **tipo_cuenta / metodo_pago / forma_pago como texto libre** — si en algún momento se quiere restringir a opciones fijas (dropdown), falta que el usuario dé la lista exacta de valores.
+- **Dar de alta al resto del equipo real** — solo existe `cristina` (admin) en producción; falta crear las cuentas de los CMs y demás admins desde el panel.
 
 ## Archivos secretos que NO se suben a git (ya en `.gitignore`)
 
