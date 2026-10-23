@@ -9,7 +9,10 @@ interface NotificacionOut {
   creado_en: string
 }
 
-const POLL_MS = 45_000
+// Cada consulta despierta la base de datos (Neon cobra por tiempo de cómputo
+// activo), así que se consulta cada 3 min y solo mientras la pestaña esté
+// visible. Al volver a la pestaña se consulta de inmediato.
+const POLL_MS = 180_000
 
 export default function NotificationBell() {
   const [notificaciones, setNotificaciones] = useState<NotificacionOut[]>([])
@@ -47,9 +50,33 @@ export default function NotificationBell() {
   }
 
   useEffect(() => {
+    let interval: ReturnType<typeof setInterval> | null = null
+
+    function start() {
+      if (interval === null) interval = setInterval(load, POLL_MS)
+    }
+    function stop() {
+      if (interval !== null) {
+        clearInterval(interval)
+        interval = null
+      }
+    }
+    function onVisibilityChange() {
+      if (document.visibilityState === 'visible') {
+        load()
+        start()
+      } else {
+        stop()
+      }
+    }
+
     load()
-    const interval = setInterval(load, POLL_MS)
-    return () => clearInterval(interval)
+    if (document.visibilityState === 'visible') start()
+    document.addEventListener('visibilitychange', onVisibilityChange)
+    return () => {
+      stop()
+      document.removeEventListener('visibilitychange', onVisibilityChange)
+    }
   }, [])
 
   const noLeidas = notificaciones.filter((n) => !n.leida)
