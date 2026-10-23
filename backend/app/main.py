@@ -44,8 +44,12 @@ app.include_router(jobs.router)
 
 
 @app.get("/api/health")
-def health(db: Session = Depends(get_db)):
-    db.execute(text("SELECT 1"))
+def health():
+    # Sin tocar la base de datos a propósito: UptimeRobot lo llama cada 5 min
+    # para mantener despierto el proceso de Render (donde corre APScheduler).
+    # Si hiciera SELECT 1, mantendría despierto también el cómputo de Neon
+    # las 24 h y agotaría la cuota gratuita. Los jobs abren su propia
+    # conexión al ejecutarse, así que no necesitan este ping para la base.
     return {"status": "ok"}
 
 
